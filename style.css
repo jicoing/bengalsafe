@@ -781,3 +781,54 @@ h1, h2, h3, h4 {
   border-color: var(--accent-blue);
   color: var(--text-primary);
 }
+
+/* --- Data Badges (LIVE / SIM) --- */
+.data-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.data-badge.live {
+  background: rgba(255, 34, 85, 0.2);
+  color: #ff4466;
+  border: 1px solid rgba(255, 34, 85, 0.3);
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+.data-badge.sim {
+  background: rgba(100, 100, 140, 0.15);
+  color: #888;
+  border: 1px solid rgba(100, 100, 140, 0.2);
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* --- Clickable Alert Cards --- */
+.alert-card.has-link {
+  border-left: 2px solid rgba(51, 136, 255, 0.4);
+}
+
+.alert-card.has-link:hover {
+  border-left-color: var(--accent-blue);
+  background: rgba(51, 136, 255, 0.06);
+}
+
+.link-hint {
+  color: var(--accent-cyan);
+  font-weight: 600;
+  font-size: 0.65rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.alert-card.has-link:hover .link-hint {
+  opacity: 1;
+}

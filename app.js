@@ -97,6 +97,202 @@ const RISK_COLORS = {
   low:      { fill: '#33dd88', stroke: '#33dd88', opacity: 0.12, weight: 1 },
 };
 
+// ---- CORS Proxy for non-CORS APIs ----
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+
+// ---- Severity Keywords ----
+const SEVERITY_KEYWORDS = {
+  critical: ['violence','violent','clash','clashes','firing','teargas','tear gas','arson','bomb','curfew','section 144','killed','death','deaths','murder','stabbing','riot','riots','attack','attacked','lynching'],
+  high: ['protest','rally','blockade','lathi','EVM tampering','stone pelting','vandalism','arrest','arrested','detained','mob','road block','shut down','shutdown','bandh','agitation','unrest'],
+  moderate: ['police','security','deployment','traffic','crowd','tension','tensions','force','forces','paramilitary','CISF','RAF','section 144','procession','march'],
+  low: ['calm','peaceful','normal','clear','stable','safe','no incident','situation under control']
+};
+
+// ---- Real Data Fetching ----
+const seenUrls = new Set();
+let realAlertCount = 0;
+let simAlertCount = 0;
+
+async function fetchGDELTNews() {
+  try {
+    const queries = [
+      'bengal election violence',
+      'kolkata clash protest',
+      'west bengal election tension',
+      'bengal election safety'
+    ];
+    const q = queries[Math.floor(Math.random() * queries.length)];
+    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&format=json&maxrecords=20&sort=datedesc`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`GDELT ${res.status}`);
+    const data = await res.json();
+    return (data.articles || []).map(a => ({
+      title: a.title || '',
+      url: a.url || '',
+      date: a.seendate ? new Date(a.seendate.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, '$1-$2-$3T$4:$5:$6Z')) : new Date(),
+      domain: a.domain || '',
+      srcType: 'news',
+    }));
+  } catch (e) {
+    console.warn('GDELT fetch failed:', e.message);
+    return [];
+  }
+}
+
+async function fetchGoogleNews() {
+  try {
+    const rssUrl = 'https://news.google.com/rss/search?q=bengal+election+2026+violence+OR+clash+OR+protest&hl=en-IN&gl=IN&ceid=IN:en';
+    const res = await fetch(CORS_PROXY + encodeURIComponent(rssUrl));
+    if (!res.ok) throw new Error(`GNews ${res.status}`);
+    const text = await res.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'text/xml');
+    const items = xml.querySelectorAll('item');
+    const results = [];
+    items.forEach(item => {
+      const title = item.querySelector('title')?.textContent || '';
+      const link = item.querySelector('link')?.textContent || '';
+      const pubDate = item.querySelector('pubDate')?.textContent || '';
+      const source = item.querySelector('source')?.textContent || '';
+      results.push({ title, url: link, date: pubDate ? new Date(pubDate) : new Date(), domain: source, srcType: 'news' });
+    });
+    return results.slice(0, 15);
+  } catch (e) {
+    console.warn('Google News fetch failed:', e.message);
+    return [];
+  }
+}
+
+async function fetchRedditPosts() {
+  try {
+    const subs = ['kolkata', 'india', 'IndiaSpeaks'];
+    const sub = subs[Math.floor(Math.random() * subs.length)];
+    const redditUrl = `https://www.reddit.com/r/${sub}/search.json?q=bengal+election&sort=new&limit=10&restrict_sr=on`;
+    const res = await fetch(CORS_PROXY + encodeURIComponent(redditUrl));
+    if (!res.ok) throw new Error(`Reddit ${res.status}`);
+    const data = await res.json();
+    return (data?.data?.children || []).map(c => ({
+      title: c.data.title || '',
+      url: `https://reddit.com${c.data.permalink}`,
+      date: new Date((c.data.created_utc || 0) * 1000),
+      domain: `r/${sub}`,
+      srcType: 'reddit',
+    }));
+  } catch (e) {
+    console.warn('Reddit fetch failed:', e.message);
+    return [];
+  }
+}
+
+function classifySeverity(title) {
+  const lower = title.toLowerCase();
+  for (const [level, keywords] of Object.entries(SEVERITY_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) return level;
+    }
+  }
+  return 'moderate';
+}
+
+function matchLocation(title) {
+  const lower = title.toLowerCase();
+  for (const spot of BENGAL_HOTSPOTS) {
+    if (lower.includes(spot.name.toLowerCase())) return spot;
+    if (spot.district && lower.includes(spot.district.toLowerCase())) return spot;
+  }
+  // Check for common aliases
+  if (lower.includes('kolkata') || lower.includes('calcutta')) return BENGAL_HOTSPOTS.find(s => s.id === 'esplanade') || BENGAL_HOTSPOTS[0];
+  if (lower.includes('bengal')) {
+    // Assign to a random hotspot weighted by risk
+    const riskWeights = BENGAL_HOTSPOTS.map(s => s.risk === 'critical' ? 4 : s.risk === 'high' ? 3 : s.risk === 'moderate' ? 2 : 1);
+    return BENGAL_HOTSPOTS[weightedRandomIndex(riskWeights)];
+  }
+  return BENGAL_HOTSPOTS[Math.floor(Math.random() * BENGAL_HOTSPOTS.length)];
+}
+
+function mapSourceType(article) {
+  if (article.srcType === 'reddit') return 'reddit';
+  const d = (article.domain || '').toLowerCase();
+  if (d.includes('twitter') || d.includes('x.com')) return 'twitter';
+  if (d.includes('police') || d.includes('gov')) return 'police';
+  if (d.includes('traffic') || d.includes('maps')) return 'traffic';
+  return 'news';
+}
+
+function articleToAlert(article) {
+  const spot = matchLocation(article.title);
+  const severity = classifySeverity(article.title);
+  const source = mapSourceType(article);
+  const now = Date.now();
+  const articleTime = article.date instanceof Date ? article.date.getTime() : now;
+  const minsAgo = Math.max(1, Math.round((now - articleTime) / 60000));
+  spot.alerts++;
+
+  return {
+    id: ++alertIdCounter,
+    source,
+    title: article.title,
+    severity,
+    location: spot.name,
+    district: spot.district,
+    lat: spot.lat,
+    lng: spot.lng,
+    timestamp: articleTime,
+    timeAgo: minsAgo < 60 ? `${minsAgo}m ago` : minsAgo < 1440 ? `${Math.floor(minsAgo/60)}h ago` : `${Math.floor(minsAgo/1440)}d ago`,
+    realData: true,
+    articleUrl: article.url || null,
+  };
+}
+
+async function fetchAndProcessAlerts() {
+  const [gdelt, gnews, reddit] = await Promise.allSettled([
+    fetchGDELTNews(), fetchGoogleNews(), fetchRedditPosts()
+  ]);
+
+  const allArticles = [
+    ...(gdelt.status === 'fulfilled' ? gdelt.value : []),
+    ...(gnews.status === 'fulfilled' ? gnews.value : []),
+    ...(reddit.status === 'fulfilled' ? reddit.value : []),
+  ];
+
+  let newCount = 0;
+  for (const article of allArticles) {
+    if (!article.title || article.title.length < 10) continue;
+    if (seenUrls.has(article.url)) continue;
+    seenUrls.add(article.url);
+
+    const alert = articleToAlert(article);
+    alerts.unshift(alert);
+    addIncidentMarker(alert);
+    realAlertCount++;
+    newCount++;
+  }
+
+  // If no real data came through, generate a simulated one as fallback
+  if (newCount === 0) {
+    const alert = generateAlert();
+    alert.realData = false;
+    alerts.unshift(alert);
+    addIncidentMarker(alert);
+    simAlertCount++;
+  }
+
+  // Cap alerts
+  while (alerts.length > 150) alerts.pop();
+
+  renderAlerts();
+  updateStats();
+  updateLastRefresh();
+
+  // Flash header on critical real alerts
+  const criticalReal = allArticles.some(a => classifySeverity(a.title) === 'critical');
+  if (criticalReal) {
+    const header = document.getElementById('header');
+    header.style.borderBottom = '2px solid rgba(255, 34, 85, 0.7)';
+    setTimeout(() => { header.style.borderBottom = '1px solid var(--border-glass)'; }, 3000);
+  }
+}
+
 // ---- App State ----
 let map;
 let heatLayer;
@@ -117,12 +313,26 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initFilters();
   renderZonesPanel();
-  generateInitialAlerts();
   updateCountdown();
   updateStats();
 
-  // Start simulation
-  setInterval(generateRandomAlert, 8000);
+  // Load initial simulated alerts as placeholder, then fetch real data
+  generateInitialAlerts();
+  fetchAndProcessAlerts(); // First real fetch
+
+  // Poll real data every 60 seconds
+  setInterval(fetchAndProcessAlerts, 60000);
+  // Fallback: generate a simulated alert every 45s if feed is quiet
+  setInterval(() => {
+    if (alerts.length < 5) {
+      const alert = generateAlert();
+      alert.realData = false;
+      alerts.unshift(alert);
+      addIncidentMarker(alert);
+      simAlertCount++;
+      renderAlerts();
+    }
+  }, 45000);
   setInterval(updateCountdown, 1000);
   setInterval(updateStats, 5000);
   setInterval(updateLastRefresh, 30000);
@@ -313,6 +523,8 @@ function generateAlert() {
     lng: spot.lng,
     timestamp: Date.now() - minsAgo * 60000,
     timeAgo: minsAgo === 1 ? '1 min ago' : `${minsAgo} mins ago`,
+    realData: false,
+    articleUrl: null,
   };
 
   return alert;
@@ -357,21 +569,28 @@ function renderAlerts() {
     ? alerts
     : alerts.filter(a => a.source === activeFilter);
 
-  feed.innerHTML = filtered.slice(0, 50).map(a => `
-    <div class="alert-card" onclick="flyToAlert(${a.lat}, ${a.lng}, '${a.location}')" id="alert-${a.id}">
+  feed.innerHTML = filtered.slice(0, 50).map(a => {
+    const badge = a.realData ? '<span class="data-badge live">LIVE</span>' : '<span class="data-badge sim">SIM</span>';
+    const clickAttr = a.realData && a.articleUrl
+      ? `onclick="window.open('${a.articleUrl}', '_blank')"`
+      : `onclick="flyToAlert(${a.lat}, ${a.lng}, '${a.location}')"`;
+    const linkClass = a.realData && a.articleUrl ? 'alert-card has-link' : 'alert-card';
+    return `
+    <div class="${linkClass}" ${clickAttr} id="alert-${a.id}">
       <div class="alert-severity ${a.severity}"></div>
       <div class="alert-body">
         <div class="alert-header">
           <span class="alert-source ${SOURCE_META[a.source].class}">
             ${SOURCE_META[a.source].icon} ${SOURCE_META[a.source].label}
           </span>
+          ${badge}
           <span class="alert-time">${a.timeAgo}</span>
         </div>
         <div class="alert-title">${a.title}</div>
-        <div class="alert-location">📍 ${a.location}, ${a.district}</div>
+        <div class="alert-location">📍 ${a.location}, ${a.district}${a.realData && a.articleUrl ? ' <span class="link-hint">↗ Read</span>' : ''}</div>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function renderZonesPanel() {
