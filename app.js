@@ -129,6 +129,27 @@ async function fetchTwitterPosts(lightweight = false) {
   }
 }
 
+async function fetchTrafficAlerts(lightweight = false) {
+  try {
+    const query = lightweight ? 'Kolkata traffic OR jam' : 'Kolkata (traffic OR jam OR accident OR blocked OR road closure)';
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+    const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(rssUrl));
+    if (!res.ok) throw new Error(`Traffic RSS2JSON ${res.status}`);
+    const data = await res.json();
+    
+    return (data.items || []).map(item => ({
+      title: item.title || '',
+      url: item.link || '',
+      date: item.pubDate ? new Date(item.pubDate) : new Date(),
+      domain: item.source || 'Traffic',
+      srcType: 'traffic'
+    }));
+  } catch (e) {
+    console.warn('Traffic fetch failed:', e.message);
+    return [];
+  }
+}
+
 function fetchRedditJsonp(url) {
   return new Promise((resolve, reject) => {
     const callbackName = 'redditCallback_' + Math.round(1000000 * Math.random());
@@ -262,18 +283,20 @@ async function fetchAndProcessAlerts(lightweight = false) {
     feed.innerHTML = '<div class="loading-message">Fetching latest alerts...</div>';
   }
 
-  const [gdelt, gnews, reddit, twitter] = await Promise.allSettled([
+  const [gdelt, gnews, reddit, twitter, traffic] = await Promise.allSettled([
     fetchWithRetry(() => fetchGDELTNews(lightweight)),
     fetchWithRetry(() => fetchGoogleNews(lightweight)),
     fetchWithRetry(() => fetchRedditPosts(lightweight)),
-    fetchWithRetry(() => fetchTwitterPosts(lightweight))
+    fetchWithRetry(() => fetchTwitterPosts(lightweight)),
+    fetchWithRetry(() => fetchTrafficAlerts(lightweight))
   ]);
 
   const allArticles = [
     ...(gdelt.status === 'fulfilled' ? gdelt.value : []),
     ...(gnews.status === 'fulfilled' ? gnews.value : []),
     ...(reddit.status === 'fulfilled' ? reddit.value : []),
-    ...(twitter.status === 'fulfilled' ? twitter.value : [])
+    ...(twitter.status === 'fulfilled' ? twitter.value : []),
+    ...(traffic.status === 'fulfilled' ? traffic.value : [])
   ];
 
   let newCount = 0;
@@ -287,6 +310,9 @@ async function fetchAndProcessAlerts(lightweight = false) {
     addIncidentMarker(alert);
     newCount++;
   }
+
+  // Sort by latest timestamp first
+  alerts.sort((a, b) => b.timestamp - a.timestamp);
 
   // Cap alerts
   while (alerts.length > 150) alerts.pop();
@@ -321,6 +347,8 @@ let activeFilter = 'all';
 let showHeatmap = true;
 let showZones = true;
 let showMarkers = true;
+let showTraffic = false;
+let trafficLayer;
 let alertIdCounter = 0;
 
 // ============================================
@@ -358,6 +386,12 @@ function initMap() {
     maxZoom: 19,
     subdomains: 'abcd',
   }).addTo(map);
+
+  // Initialize traffic layer (but don't add to map yet)
+  trafficLayer = L.tileLayer('https://mt1.google.com/vt?lyrs=h,traffic&x={x}&y={y}&z={z}', {
+    maxZoom: 19,
+    attribution: 'Traffic data © Google'
+  });
 
   // Attribution
   L.control.attribution({ position: 'bottomright', prefix: '© OpenStreetMap · CartoDB' }).addTo(map);
@@ -477,6 +511,13 @@ function toggleHeatmap() {
   document.getElementById('btn-heatmap').classList.toggle('active', showHeatmap);
   if (showHeatmap) map.addLayer(heatLayer);
   else map.removeLayer(heatLayer);
+}
+
+function toggleTraffic() {
+  showTraffic = !showTraffic;
+  document.getElementById('btn-traffic').classList.toggle('active', showTraffic);
+  if (showTraffic) map.addLayer(trafficLayer);
+  else map.removeLayer(trafficLayer);
 }
 
 function toggleZones() {
