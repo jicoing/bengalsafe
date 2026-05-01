@@ -27,59 +27,7 @@ const BENGAL_HOTSPOTS = [
   { id: 'midnapore', name: 'Midnapore Town', district: 'Paschim Medinipur', lat: 22.4263, lng: 87.3193, risk: 'moderate', radius: 1500, issues: 'Maoist presence in outskirts, political rivalries', alerts: 0 },
 ];
 
-// ---- Social Media Post Templates ----
-const ALERT_TEMPLATES = {
-  reddit: [
-    { title: 'Heavy police deployment spotted near {location}', severity: 'moderate' },
-    { title: 'Road completely blocked at {location}, avoid this area', severity: 'high' },
-    { title: 'Political rally turning aggressive near {location}', severity: 'critical' },
-    { title: 'Shops closing early in {location} area, tensions rising', severity: 'high' },
-    { title: 'Traffic diverted near {location} due to procession', severity: 'moderate' },
-    { title: 'Teargas reported near {location} — stay away', severity: 'critical' },
-    { title: 'Large crowd gathering at {location}, police on alert', severity: 'high' },
-    { title: 'Situation calm in {location} for now, but police everywhere', severity: 'low' },
-    { title: 'Stone pelting incident reported near {location}', severity: 'critical' },
-    { title: 'Party workers creating roadblock at {location}', severity: 'high' },
-    { title: '{location}: Internet seems slow, possible throttling?', severity: 'moderate' },
-    { title: 'Section 144 reportedly imposed near {location}', severity: 'critical' },
-  ],
-  twitter: [
-    { title: '🚨 BREAKING: Clashes between party workers at {location} #BengalElections', severity: 'critical' },
-    { title: 'Massive traffic jam near {location}, all routes blocked #Kolkata', severity: 'high' },
-    { title: 'Counting center at {location} surrounded by huge crowd #WBElections2026', severity: 'high' },
-    { title: 'Police lathi-charge reported at {location} — multiple injuries #Bengal', severity: 'critical' },
-    { title: 'Celebration firecrackers at {location} — but tensions still high #ElectionResults', severity: 'moderate' },
-    { title: 'Vehicle vandalism reported near {location}, avoid the area #StaySafe', severity: 'critical' },
-    { title: 'All clear at {location} — heavy security presence #BengalSafe', severity: 'low' },
-    { title: 'Victory rally at {location} blocking main road for 2km #Bengal', severity: 'high' },
-    { title: 'EMG services struggling to reach {location} due to crowds', severity: 'critical' },
-    { title: 'Bomb squad called to {location} after suspicious package #Alert', severity: 'critical' },
-  ],
-  traffic: [
-    { title: 'Severe congestion on NH near {location} — 3hr+ delay', severity: 'high' },
-    { title: 'Road closure in effect around {location} counting center', severity: 'high' },
-    { title: 'Bridge near {location} closed for security — use alternate route', severity: 'moderate' },
-    { title: 'Traffic moving slowly through {location} — procession ahead', severity: 'moderate' },
-    { title: 'Gridlock at {location} intersection — avoid if possible', severity: 'high' },
-    { title: '{location} bypass road clear — use as alternate', severity: 'low' },
-  ],
-  police: [
-    { title: 'Prohibitory orders in {location} — no gathering of 4+ people', severity: 'critical' },
-    { title: 'Rapid Action Force deployed at {location}', severity: 'high' },
-    { title: 'Section 144 CrPC imposed in {location} area', severity: 'critical' },
-    { title: 'Police checkpoint set up at {location} entry points', severity: 'moderate' },
-    { title: 'Curfew imposed in parts of {location} till further notice', severity: 'critical' },
-    { title: '{location}: Situation under control, enhanced patrol continues', severity: 'low' },
-  ],
-  news: [
-    { title: 'EC orders re-polling at booth near {location} after violence', severity: 'critical' },
-    { title: '{location}: Counting trends spark celebrations, security tightened', severity: 'high' },
-    { title: 'Governor visits {location}, appeals for peace', severity: 'moderate' },
-    { title: 'Internet shutdown in {location} district — official order', severity: 'high' },
-    { title: '{location}: Winning candidate\'s office attacked, police investigating', severity: 'critical' },
-    { title: 'Local administration declares {location} area sensitive', severity: 'high' },
-  ],
-};
+
 
 const SOURCE_META = {
   reddit: { label: 'Reddit', icon: '🔴', class: 'source-reddit', sub: 'r/kolkata' },
@@ -110,10 +58,8 @@ const SEVERITY_KEYWORDS = {
 
 // ---- Real Data Fetching ----
 const seenUrls = new Set();
-let realAlertCount = 0;
-let simAlertCount = 0;
 
-async function fetchGDELTNews() {
+async function fetchGDELTNews(lightweight = false) {
   try {
     const queries = [
       'bengal election violence',
@@ -122,7 +68,8 @@ async function fetchGDELTNews() {
       'bengal election safety'
     ];
     const q = queries[Math.floor(Math.random() * queries.length)];
-    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&format=json&maxrecords=20&sort=datedesc`;
+    const maxRecords = lightweight ? 10 : 20;
+    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&format=json&maxrecords=${maxRecords}&sort=datedesc`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`GDELT ${res.status}`);
     const data = await res.json();
@@ -139,49 +86,96 @@ async function fetchGDELTNews() {
   }
 }
 
-async function fetchGoogleNews() {
+async function fetchGoogleNews(lightweight = false) {
   try {
     const rssUrl = 'https://news.google.com/rss/search?q=bengal+election+2026+violence+OR+clash+OR+protest&hl=en-IN&gl=IN&ceid=IN:en';
-    const res = await fetch(CORS_PROXY + encodeURIComponent(rssUrl));
-    if (!res.ok) throw new Error(`GNews ${res.status}`);
-    const text = await res.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'text/xml');
-    const items = xml.querySelectorAll('item');
-    const results = [];
-    items.forEach(item => {
-      const title = item.querySelector('title')?.textContent || '';
-      const link = item.querySelector('link')?.textContent || '';
-      const pubDate = item.querySelector('pubDate')?.textContent || '';
-      const source = item.querySelector('source')?.textContent || '';
-      results.push({ title, url: link, date: pubDate ? new Date(pubDate) : new Date(), domain: source, srcType: 'news' });
-    });
-    return results.slice(0, 15);
+    const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(rssUrl));
+    if (!res.ok) throw new Error(`GNews RSS2JSON ${res.status}`);
+    const data = await res.json();
+    
+    const limit = lightweight ? 8 : 15;
+    return (data.items || []).slice(0, limit).map(item => ({
+      title: item.title || '',
+      url: item.link || '',
+      date: item.pubDate ? new Date(item.pubDate) : new Date(),
+      domain: item.source || 'News',
+      srcType: 'news'
+    }));
   } catch (e) {
     console.warn('Google News fetch failed:', e.message);
     return [];
   }
 }
 
-async function fetchRedditPosts() {
+async function fetchTwitterPosts(lightweight = false) {
   try {
-    const subs = ['kolkata', 'india', 'IndiaSpeaks'];
-    const sub = subs[Math.floor(Math.random() * subs.length)];
-    const redditUrl = `https://www.reddit.com/r/${sub}/search.json?q=bengal+election&sort=new&limit=10&restrict_sr=on`;
-    const res = await fetch(CORS_PROXY + encodeURIComponent(redditUrl));
-    if (!res.ok) throw new Error(`Reddit ${res.status}`);
+    // Use Google News RSS restricted to twitter.com as a reliable client-side workaround
+    const query = lightweight ? 'site:twitter.com bengal election' : 'site:twitter.com bengal election OR kolkata clash';
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+    const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(rssUrl));
+    if (!res.ok) throw new Error(`Twitter RSS2JSON ${res.status}`);
     const data = await res.json();
-    return (data?.data?.children || []).map(c => ({
-      title: c.data.title || '',
-      url: `https://reddit.com${c.data.permalink}`,
-      date: new Date((c.data.created_utc || 0) * 1000),
-      domain: `r/${sub}`,
-      srcType: 'reddit',
+    
+    return (data.items || []).map(item => ({
+      title: item.title || '',
+      url: item.link || '',
+      date: item.pubDate ? new Date(item.pubDate) : new Date(),
+      domain: 'twitter.com',
+      srcType: 'twitter'
     }));
   } catch (e) {
-    console.warn('Reddit fetch failed:', e.message);
+    console.warn('Twitter fetch failed:', e.message);
     return [];
   }
+}
+
+function fetchRedditJsonp(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'redditCallback_' + Math.round(1000000 * Math.random());
+    window[callbackName] = function(data) {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      resolve(data);
+    };
+    
+    const script = document.createElement('script');
+    script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'jsonp=' + callbackName;
+    script.onerror = () => {
+      delete window[callbackName];
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+      reject(new Error('JSONP failed'));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+async function fetchRedditPosts(lightweight = false) {
+  const subs = lightweight 
+    ? ['kolkata', 'india']
+    : ['kolkata', 'india', 'IndiaSpeaks', 'WestBengal', 'IndiaPolitics', 'kolkataTraffic'];
+  const limit = lightweight ? 5 : 10;
+  const results = [];
+
+  for (const sub of subs) {
+    try {
+      const redditUrl = `https://www.reddit.com/r/${sub}/search.json?q=bengal+election+OR+west+bengal+OR+kolkata&sort=new&limit=${limit}&restrict_sr=on`;
+      const data = await fetchRedditJsonp(redditUrl);
+      const posts = (data?.data?.children || []).map(c => ({
+        title: c.data.title || '',
+        url: `https://reddit.com${c.data.permalink}`,
+        date: new Date((c.data.created_utc || 0) * 1000),
+        domain: `r/${sub}`,
+        srcType: 'reddit',
+      }));
+      results.push(...posts);
+    } catch (e) {
+      console.warn(`Reddit fetch failed for r/${sub}:`, e.message);
+    }
+  }
+
+  return results;
 }
 
 function classifySeverity(title) {
@@ -239,20 +233,47 @@ function articleToAlert(article) {
     lng: spot.lng,
     timestamp: articleTime,
     timeAgo: minsAgo < 60 ? `${minsAgo}m ago` : minsAgo < 1440 ? `${Math.floor(minsAgo/60)}h ago` : `${Math.floor(minsAgo/1440)}d ago`,
-    realData: true,
     articleUrl: article.url || null,
   };
 }
 
-async function fetchAndProcessAlerts() {
-  const [gdelt, gnews, reddit] = await Promise.allSettled([
-    fetchGDELTNews(), fetchGoogleNews(), fetchRedditPosts()
+let isFirstLoad = true;
+
+let fetchAttempts = 0;
+const MAX_RETRIES = 3;
+
+async function fetchWithRetry(fetchFn, retries = MAX_RETRIES) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const result = await fetchFn();
+      if (result && result.length > 0) return result;
+    } catch (e) {
+      console.warn(`Fetch attempt ${i + 1} failed:`, e.message);
+    }
+    await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+  }
+  return [];
+}
+
+
+async function fetchAndProcessAlerts(lightweight = false) {
+  if (isFirstLoad && lightweight) {
+    const feed = document.getElementById('alert-feed');
+    feed.innerHTML = '<div class="loading-message">Fetching latest alerts...</div>';
+  }
+
+  const [gdelt, gnews, reddit, twitter] = await Promise.allSettled([
+    fetchWithRetry(() => fetchGDELTNews(lightweight)),
+    fetchWithRetry(() => fetchGoogleNews(lightweight)),
+    fetchWithRetry(() => fetchRedditPosts(lightweight)),
+    fetchWithRetry(() => fetchTwitterPosts(lightweight))
   ]);
 
   const allArticles = [
     ...(gdelt.status === 'fulfilled' ? gdelt.value : []),
     ...(gnews.status === 'fulfilled' ? gnews.value : []),
     ...(reddit.status === 'fulfilled' ? reddit.value : []),
+    ...(twitter.status === 'fulfilled' ? twitter.value : [])
   ];
 
   let newCount = 0;
@@ -264,17 +285,7 @@ async function fetchAndProcessAlerts() {
     const alert = articleToAlert(article);
     alerts.unshift(alert);
     addIncidentMarker(alert);
-    realAlertCount++;
     newCount++;
-  }
-
-  // If no real data came through, generate a simulated one as fallback
-  if (newCount === 0) {
-    const alert = generateAlert();
-    alert.realData = false;
-    alerts.unshift(alert);
-    addIncidentMarker(alert);
-    simAlertCount++;
   }
 
   // Cap alerts
@@ -283,6 +294,13 @@ async function fetchAndProcessAlerts() {
   renderAlerts();
   updateStats();
   updateLastRefresh();
+  isFirstLoad = false;
+
+  if (newCount === 0 && alerts.length === 0) {
+    const feed = document.getElementById('alert-feed');
+    feed.innerHTML = '<div class="empty-message">No alerts available. Will retry automatically...</div>';
+    setTimeout(() => fetchAndProcessAlerts(false), 30000);
+  }
 
   // Flash header on critical real alerts
   const criticalReal = allArticles.some(a => classifySeverity(a.title) === 'critical');
@@ -316,23 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
   updateCountdown();
   updateStats();
 
-  // Load initial simulated alerts as placeholder, then fetch real data
-  generateInitialAlerts();
-  fetchAndProcessAlerts(); // First real fetch
-
-  // Poll real data every 60 seconds
-  setInterval(fetchAndProcessAlerts, 60000);
-  // Fallback: generate a simulated alert every 45s if feed is quiet
-  setInterval(() => {
-    if (alerts.length < 5) {
-      const alert = generateAlert();
-      alert.realData = false;
-      alerts.unshift(alert);
-      addIncidentMarker(alert);
-      simAlertCount++;
-      renderAlerts();
-    }
-  }, 45000);
+  fetchAndProcessAlerts(true);
+  setInterval(() => fetchAndProcessAlerts(false), 60000);
   setInterval(updateCountdown, 1000);
   setInterval(updateStats, 5000);
   setInterval(updateLastRefresh, 30000);
@@ -448,11 +451,15 @@ function addIncidentMarker(alert) {
   });
 
   const marker = L.marker([offsetLat, offsetLng], { icon }).addTo(map);
+  const readLink = alert.articleUrl 
+    ? `<a href="${alert.articleUrl}" target="_blank" class="popup-read-link">↗ Read</a>` 
+    : '';
   marker.bindPopup(`
     <div class="popup-title">${alert.title}</div>
     <span class="popup-risk ${alert.severity}">${alert.severity.toUpperCase()}</span>
     <div class="popup-detail">📍 ${alert.location}, ${alert.district || ''}</div>
     <div class="popup-detail">${SOURCE_META[alert.source].icon} ${SOURCE_META[alert.source].label} • ${alert.timeAgo}</div>
+    ${readLink}
   `);
 
   incidentMarkers.push(marker);
@@ -490,75 +497,7 @@ function toggleMarkers() {
   });
 }
 
-// ============================================
-// ALERT ENGINE
-// ============================================
-function generateAlert() {
-  const sources = Object.keys(ALERT_TEMPLATES);
-  const weights = [0.25, 0.25, 0.2, 0.15, 0.15]; // reddit, twitter, traffic, police, news
-  const source = weightedRandom(sources, weights);
-  const templates = ALERT_TEMPLATES[source];
-  const template = templates[Math.floor(Math.random() * templates.length)];
 
-  // Bias towards higher-risk locations
-  const riskWeights = BENGAL_HOTSPOTS.map(s =>
-    s.risk === 'critical' ? 4 : s.risk === 'high' ? 3 : s.risk === 'moderate' ? 2 : 1
-  );
-  const spotIdx = weightedRandomIndex(riskWeights);
-  const spot = BENGAL_HOTSPOTS[spotIdx];
-
-  const title = template.title.replace(/\{location\}/g, spot.name);
-  const minsAgo = Math.floor(Math.random() * 15) + 1;
-
-  spot.alerts++;
-
-  const alert = {
-    id: ++alertIdCounter,
-    source,
-    title,
-    severity: template.severity,
-    location: spot.name,
-    district: spot.district,
-    lat: spot.lat,
-    lng: spot.lng,
-    timestamp: Date.now() - minsAgo * 60000,
-    timeAgo: minsAgo === 1 ? '1 min ago' : `${minsAgo} mins ago`,
-    realData: false,
-    articleUrl: null,
-  };
-
-  return alert;
-}
-
-function generateInitialAlerts() {
-  for (let i = 0; i < 15; i++) {
-    const alert = generateAlert();
-    alerts.unshift(alert);
-    addIncidentMarker(alert);
-  }
-  renderAlerts();
-}
-
-function generateRandomAlert() {
-  const alert = generateAlert();
-  alerts.unshift(alert);
-
-  // Keep max 100 alerts
-  if (alerts.length > 100) alerts.pop();
-
-  addIncidentMarker(alert);
-  renderAlerts();
-  updateStats();
-
-  // Flash header on critical
-  if (alert.severity === 'critical') {
-    const header = document.getElementById('header');
-    header.style.borderBottom = '1px solid rgba(255, 34, 85, 0.5)';
-    setTimeout(() => {
-      header.style.borderBottom = '1px solid var(--border-glass)';
-    }, 2000);
-  }
-}
 
 // ============================================
 // UI RENDERING
@@ -570,24 +509,19 @@ function renderAlerts() {
     : alerts.filter(a => a.source === activeFilter);
 
   feed.innerHTML = filtered.slice(0, 50).map(a => {
-    const badge = a.realData ? '<span class="data-badge live">LIVE</span>' : '<span class="data-badge sim">SIM</span>';
-    const clickAttr = a.realData && a.articleUrl
-      ? `onclick="window.open('${a.articleUrl}', '_blank')"`
-      : `onclick="flyToAlert(${a.lat}, ${a.lng}, '${a.location}')"`;
-    const linkClass = a.realData && a.articleUrl ? 'alert-card has-link' : 'alert-card';
+    const linkClass = a.articleUrl ? 'alert-card has-link' : 'alert-card';
     return `
-    <div class="${linkClass}" ${clickAttr} id="alert-${a.id}">
+    <div class="${linkClass}" onclick="flyToAlert(${a.lat}, ${a.lng}, '${a.location}')" id="alert-${a.id}">
       <div class="alert-severity ${a.severity}"></div>
       <div class="alert-body">
         <div class="alert-header">
           <span class="alert-source ${SOURCE_META[a.source].class}">
             ${SOURCE_META[a.source].icon} ${SOURCE_META[a.source].label}
           </span>
-          ${badge}
           <span class="alert-time">${a.timeAgo}</span>
         </div>
         <div class="alert-title">${a.title}</div>
-        <div class="alert-location">📍 ${a.location}, ${a.district}${a.realData && a.articleUrl ? ' <span class="link-hint">↗ Read</span>' : ''}</div>
+        <div class="alert-location">📍 ${a.location}, ${a.district}${a.articleUrl ? ` <a href="${a.articleUrl}" target="_blank" class="link-hint" onclick="event.stopPropagation()">↗ Read</a>` : ''}</div>
       </div>
     </div>
   `}).join('');

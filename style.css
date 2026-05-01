@@ -689,6 +689,19 @@ h1, h2, h3, h4 {
   margin-bottom: 0.2rem;
 }
 
+.popup-read-link {
+  display: inline-block;
+  margin-top: 0.4rem;
+  color: var(--accent-cyan);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+.popup-read-link:hover {
+  text-decoration: underline;
+}
+
 /* --- Pulsing map markers --- */
 @keyframes dangerPulse {
   0% { transform: scale(1); opacity: 0.7; }
@@ -825,10 +838,31 @@ h1, h2, h3, h4 {
   color: var(--accent-cyan);
   font-weight: 600;
   font-size: 0.65rem;
-  opacity: 0;
-  transition: opacity 0.2s;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.alert-card.has-link:hover .link-hint {
-  opacity: 1;
+.link-hint:hover {
+  text-decoration: underline;
+}
+
+/* --- Loading Message --- */
+.loading-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
