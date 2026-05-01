@@ -319,6 +319,8 @@ async function fetchAndProcessAlerts(lightweight = false) {
 
   renderAlerts();
   updateStats();
+  updateHistogram();
+  updateBreakingNews();
   updateLastRefresh();
   isFirstLoad = false;
 
@@ -649,6 +651,57 @@ function updateCountdown() {
   } else {
     document.getElementById('countdown-value').textContent = `${hours}h ${mins}m`;
   }
+}
+
+let breakingNewsInterval;
+let currentBreakingIndex = 0;
+
+function updateBreakingNews() {
+  const criticalAlerts = alerts.filter(a => a.severity === 'critical' || a.title.toLowerCase().includes('breaking'));
+  const bar = document.getElementById('breaking-news-bar');
+  const text = document.getElementById('breaking-text');
+  
+  if (criticalAlerts.length > 0) {
+    bar.style.display = 'flex';
+    
+    clearInterval(breakingNewsInterval);
+    const updateTicker = () => {
+      const alert = criticalAlerts[currentBreakingIndex % criticalAlerts.length];
+      text.style.opacity = 0;
+      setTimeout(() => {
+        text.innerHTML = `<strong>${alert.location || 'Bengal'}:</strong> ${alert.title} <span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 10px;">${alert.timeAgo}</span>`;
+        text.style.opacity = 1;
+      }, 300);
+      currentBreakingIndex++;
+    };
+    
+    updateTicker();
+    breakingNewsInterval = setInterval(updateTicker, 5000);
+  } else {
+    if (bar) bar.style.display = 'none';
+    clearInterval(breakingNewsInterval);
+  }
+}
+
+function updateHistogram() {
+  let counts = { critical: 0, high: 0, moderate: 0, low: 0 };
+  alerts.forEach(a => {
+    if (counts[a.severity] !== undefined) {
+      counts[a.severity]++;
+    }
+  });
+
+  const max = Math.max(1, counts.critical, counts.high, counts.moderate, counts.low);
+
+  ['critical', 'high', 'moderate', 'low'].forEach(level => {
+    const valEl = document.getElementById(`hist-val-${level}`);
+    const barEl = document.getElementById(`hist-bar-${level}`);
+    if (valEl && barEl) {
+      valEl.textContent = counts[level];
+      const pct = (counts[level] / max) * 100;
+      barEl.style.height = `${pct}%`;
+    }
+  });
 }
 
 function updateLastRefresh() {

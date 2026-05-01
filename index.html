@@ -51,6 +51,12 @@
       </div>
     </header>
 
+    <!-- Breaking News Bar -->
+    <div class="breaking-news-bar" id="breaking-news-bar">
+      <div class="breaking-badge">BREAKING</div>
+      <div class="breaking-text" id="breaking-text">No critical updates at the moment.</div>
+    </div>
+
     <!-- ========== MAIN ========== -->
     <main class="main-content">
       <!-- Map Section -->
@@ -72,6 +78,17 @@
           <div class="legend-item"><span class="legend-dot high"></span> High — Caution</div>
           <div class="legend-item"><span class="legend-dot moderate"></span> Moderate</div>
           <div class="legend-item"><span class="legend-dot safe"></span> Safe</div>
+        </div>
+
+        <!-- Threat Histogram -->
+        <div class="threat-histogram" id="threat-histogram">
+          <h4>Threat Levels</h4>
+          <div class="histogram-bars">
+            <div class="hist-col"><div class="hist-val" id="hist-val-critical">0</div><div class="hist-bar-bg"><div class="hist-bar critical" id="hist-bar-critical"></div></div><span>CRIT</span></div>
+            <div class="hist-col"><div class="hist-val" id="hist-val-high">0</div><div class="hist-bar-bg"><div class="hist-bar high" id="hist-bar-high"></div></div><span>HIGH</span></div>
+            <div class="hist-col"><div class="hist-val" id="hist-val-moderate">0</div><div class="hist-bar-bg"><div class="hist-bar moderate" id="hist-bar-moderate"></div></div><span>MOD</span></div>
+            <div class="hist-col"><div class="hist-val" id="hist-val-low">0</div><div class="hist-bar-bg"><div class="hist-bar low" id="hist-bar-low"></div></div><span>LOW</span></div>
+          </div>
         </div>
       </div>
 
