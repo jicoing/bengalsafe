@@ -243,6 +243,9 @@ function articleToAlert(article) {
   const minsAgo = Math.max(1, Math.round((now - articleTime) / 60000));
   spot.alerts++;
 
+  const offsetLat = spot.lat + (Math.random() - 0.5) * 0.02;
+  const offsetLng = spot.lng + (Math.random() - 0.5) * 0.02;
+
   return {
     id: ++alertIdCounter,
     source,
@@ -250,8 +253,8 @@ function articleToAlert(article) {
     severity,
     location: spot.name,
     district: spot.district,
-    lat: spot.lat,
-    lng: spot.lng,
+    lat: offsetLat,
+    lng: offsetLng,
     timestamp: articleTime,
     timeAgo: minsAgo < 60 ? `${minsAgo}m ago` : minsAgo < 1440 ? `${Math.floor(minsAgo/60)}h ago` : `${Math.floor(minsAgo/1440)}d ago`,
     articleUrl: article.url || null,
@@ -299,9 +302,16 @@ async function fetchAndProcessAlerts(lightweight = false) {
     ...(traffic.status === 'fulfilled' ? traffic.value : [])
   ];
 
+  const nowMs = Date.now();
+  const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
+
   let newCount = 0;
   for (const article of allArticles) {
     if (!article.title || article.title.length < 10) continue;
+
+    const articleTime = article.date instanceof Date ? article.date.getTime() : nowMs;
+    if (nowMs - articleTime > FIVE_DAYS_MS) continue;
+
     if (seenUrls.has(article.url)) continue;
     seenUrls.add(article.url);
 
@@ -468,9 +478,6 @@ function addIncidentMarker(alert) {
   const spot = BENGAL_HOTSPOTS.find(s => s.name === alert.location);
   if (!spot) return;
 
-  const offsetLat = spot.lat + (Math.random() - 0.5) * 0.02;
-  const offsetLng = spot.lng + (Math.random() - 0.5) * 0.02;
-
   const severityColors = { critical: '#ff2255', high: '#ff6633', moderate: '#ffbb33', low: '#33dd88' };
   const color = severityColors[alert.severity] || '#ffbb33';
 
@@ -486,7 +493,7 @@ function addIncidentMarker(alert) {
     className: 'incident-marker',
   });
 
-  const marker = L.marker([offsetLat, offsetLng], { icon }).addTo(map);
+  const marker = L.marker([alert.lat, alert.lng], { icon }).addTo(map);
   const readLink = alert.articleUrl 
     ? `<a href="${alert.articleUrl}" target="_blank" class="popup-read-link">↗ Read</a>` 
     : '';
