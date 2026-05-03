@@ -1,6 +1,6 @@
 // =============================================
-// BengalSafe — app.js
-// Real-time election safety tracker engine
+// BengalLive — app.js
+// Real-time election live tracker engine
 // =============================================
 
 // ---- Bengal Hotspot Database ----
@@ -181,7 +181,7 @@ async function fetchRedditPosts(lightweight = false) {
 
   for (const sub of subs) {
     try {
-      const redditUrl = `https://www.reddit.com/r/${sub}/search.json?q=bengal+election+OR+west+bengal+OR+kolkata&sort=new&limit=${limit}&restrict_sr=on`;
+      const redditUrl = `https://www.reddit.com/r/${sub}/search.json?q=bengal+election+OR+west+bengal+OR+kolkata+OR+stay+OR+safe+OR+indoor+OR+vandalism&sort=new&limit=${limit}&restrict_sr=on`;
       const data = await fetchRedditJsonp(redditUrl);
       const posts = (data?.data?.children || []).map(c => ({
         title: c.data.title || '',
