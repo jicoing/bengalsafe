@@ -2,7 +2,7 @@
 
 A real-time election live tracking application for West Bengal, India. Designed to help citizens stay informed about danger zones, traffic disruptions, and potential conflicts during the May 4th, 2026 election results day.
 
-Bengallive: [https://(https://jicoing.github.io/bengallive/)]
+https://jicoing.github.io/bengallive/)
 
 ## Features
 
