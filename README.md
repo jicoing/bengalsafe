@@ -2,6 +2,8 @@
 
 A real-time election live tracking application for West Bengal, India. Designed to help citizens stay informed about danger zones, traffic disruptions, and potential conflicts during the May 4th, 2026 election results day.
 
+URL: [https://](https://jicoing.github.io/bengallive/)]
+
 ## Features
 
 - **Interactive Map** — Leaflet-powered map showing risk zones across West Bengal
