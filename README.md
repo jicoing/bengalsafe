@@ -1,6 +1,6 @@
 # BengalLive — Bengal Live Tracker
 
-A real-time live tracking application for West Bengal, India. Designed to help citizens stay informed about danger zones, traffic disruptions, and potential conflicts during the May 4th, 2026 election results day.
+A real-time live tracking application for West Bengal, India. Designed to help citizens stay informed about danger zones, traffic disruptions, and potential conflicts during or after the May 4th, 2026 election results day.
 
 https://jicoing.github.io/bengallive/
 
